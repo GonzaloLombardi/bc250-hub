@@ -189,6 +189,71 @@ Only the 2000 MHz row was sampled live. Don't compare those rows with the Octobe
 
 ---
 
+## Sustained loads after a cooling upgrade (10-minute soaks)
+
+**Oct 18 2026, Omarchy** (kernel 7.2.5, governor v0.4.14 with `min = 500`, `max = 1850`,
+`throttling = 85` / `throttling_recovery = 75`), 40 CU + 8 cores, llama.cpp `b11382`,
+Qwen2.5-3B Q4_K_M. Same board as the tables above, after improving its cooling. Package power
+(PPT) is CPU + GPU.
+
+### Short benchmarks: 15–20 °C cooler, same speed
+
+| Test | Before | After the upgrade |
+|---|---|---|
+| Idle (500 MHz floor), GPU edge / CPU Tctl | 53–54 / 55–56 °C, 33.5 W | **37 / 39 °C**, 31.6 W |
+| 7-Zip `7z b`, 16 threads uncapped | 66,377 MIPS | 66,211 MIPS, CPU peak **66 °C** |
+| Fixed 1500 MHz, pp512 / temp avg–peak | 879 / 78–80 °C | 884 / **57–59 °C** |
+| Fixed 1700 MHz | 990 / 83–84 °C | 995 / **63–64 °C** |
+| Fixed 1850 MHz | 1064 / 85–86 °C | 1075 / **67–69 °C** |
+| Fixed 2000 MHz | 1137 / 89–91 °C | **1155** / **73–74 °C** |
+
+The "before" pp512 numbers are the Omarchy runs; the "before" temperatures are the October
+Bazzite sweep above (the Omarchy sweep didn't log them) and the idle row is the
+[500 MHz floor](#lowering-the-floor-to-500-mhz-10-w-less-at-idle) measurement. The 7-Zip
+score didn't move because nothing was throttling it. The only speed gain is at 2000 MHz
+(+1.6 %), which no longer reaches the 85 °C throttle within a 10-rep run.
+
+### 10-minute soaks: the heatsink still sets the ceiling
+
+Short runs end before the heatsink saturates. We ran each load for 10 minutes with
+[`scripts/soak-test.sh`](../scripts/soak-test.sh) (pp512 back to back, stress-ng on all 16
+threads when the CPU is loaded, hard stop at 100 °C). "Steady" is the average of minutes 5–10.
+
+| GPU | CPU | pp512 first min → steady | CPU work (stress-ng bogo ops/s) | Steady Tctl / edge (edge peak) | Steady PPT |
+|---|---|---|---|---|---|
+| adaptive | idle | 1074 → **913** | — | 86.7 / 83.9 °C (90) | 113 W |
+| adaptive | uncapped | 1060 → **stopped at 46 s, Tctl 100 °C** | — | still climbing ~1 °C/s | 154 W avg, 182 W peak |
+| adaptive | cap 2550 | 1053 → **869** | ≈12,600 ¹ | 87.0 / 83.6 °C (90) | 117 W |
+| fixed 1700 | cap 2000 | 969 → 910 | 9,647 | 89.0 / 86.1 °C (91) | 119 W |
+| fixed 1700 | cap 2550 | 976 → 892 | 12,621 | 89.6 / 86.7 °C (92) | 121 W |
+| fixed 1850 | cap 2000 | 1046 → **944** | 9,669 | 90.8 / 87.7 °C (93) | 125 W |
+| **fixed 1850** | **cap 2550** | 1054 → **924** | **12,633** | **91.8 / 88.6 °C (95)** | 126 W |
+
+¹ Not logged in that run; the same 2550 MHz cap gave 12,621–12,633 in every other run, and the
+CPU held 2544 MHz throughout.
+
+What it shows:
+- **The upgrade buys time, not a higher sustained ceiling.** GPU-only at the adaptive default
+  runs at full speed for ~100 s, then the GPU edge reaches 85 °C and throughput settles 15 %
+  lower (~1074 → ~913 tok/s). The board heat-soaks at ~110–125 W whatever the clocks.
+- **Uncapped CPU + GPU is not sustainable.** The CPU never throttled itself (3454 MHz average)
+  and reached 100 °C in 46 s. The [2550 MHz cap](cpu-8core-unlock-bazzite.md#results-measured)
+  is required for combined loads, even with the better cooling.
+- **Pinning the GPU sustains more than the adaptive mode at the same 1850 MHz ceiling:**
+  924 vs 869 tok/s with the CPU loaded (+6 %). It isn't free. In pinned mode the throttle only
+  trims the clock (pp512 cycles between ~1010, ~925 and ~835 tok/s), while the adaptive mode
+  backs off further (its recovery point is `throttling_recovery = 75`). So the pinned runs sit ~5 °C hotter (edge 88.6 vs
+  83.6 °C average, 95 vs 90 °C peak).
+- **Capping the CPU at 2000 instead of 2550 MHz barely helps the GPU** (+2 % at 1850 MHz, +2 %
+  at 1700 MHz) and costs 23 % of the CPU's work. Temperatures drop only ~1 °C, because the
+  shared heatsink is what's saturated.
+- **A loaded CPU costs the GPU ~5 % sustained** (913 → 869 tok/s, both adaptive).
+
+These are worst cases: stress-ng on 16 threads plus back-to-back compute. Games load both sides
+less, so they settle later and cooler.
+
+---
+
 ## How to pin a frequency for benchmarking
 
 The governor is load-adaptive, so to measure a single clock cleanly you need to hold it fixed.
@@ -352,6 +417,10 @@ sudo systemctl restart cyan-skillfish-governor-smu
   (≤ 60 °C in June); it sits right at the throttle threshold when airflow is poor.
 - **Max performance:** `max = 2000` — highest throughput, runs hot (~90 °C on weak cooling);
   your call, with cooling + monitoring (see [Going to 2000 MHz](#going-to-2000-mhz-the-top-safe-point)).
+- **Long CPU + GPU loads (8 cores):** cap the CPU at 2550 MHz, always. For the most sustained
+  GPU throughput, run the load through `cyan-skillfish-performance-mode --fixed-frequency 1850`
+  (it works as a Steam launch-option wrapper): +6 % over the adaptive mode after 10 minutes, at
+  ~5 °C more ([soaks above](#10-minute-soaks-the-heatsink-still-sets-the-ceiling)).
 - If your board idles hot (GPU edge above ~60 °C, motherboard "System" sensor above ~50 °C),
   **fix the airflow before tuning clocks**. It's worth more than any safe-point tweak.
 - Keep `throttling = 85` on at every tier.

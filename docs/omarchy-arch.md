@@ -238,6 +238,9 @@ The cold-boot cycle, done remotely:
 | Desktop login | notification appeared; a click rebooted the board |
 | After that reboot | **16 threads**, marker gone, 40/40 CUs, governor active |
 
+A real power cut later went the same way (Oct 18): the board came back with 12 threads, the
+service re-applied the mask, and after one reboot it was at 16 threads and 40/40 CUs.
+
 ## Benchmarks: Omarchy vs Bazzite (same board, same scripts)
 
 Same model (Qwen2.5-3B Q4_K_M), same llama.cpp builds and the repo's scripts. The Bazzite numbers
@@ -274,6 +277,11 @@ the CPU hit the script's 95 °C watchdog (Bazzite peaked at 94 °C). Idle temper
 3–4 °C higher than in the Bazzite runs, so we read this as a warmer room or weaker airflow, not
 the OS. Either way, the 2550 MHz cap [recommended for combined loads](cpu-8core-unlock-bazzite.md#results-measured)
 matters even more on this board now.
+
+**After a cooling upgrade** (Oct 18) the short runs above came out 15–20 °C cooler at the same
+speed, but 10-minute soaks still heat-soak the board and uncapped CPU + GPU still hits 100 °C
+(in 46 s). Those runs, and a GPU-clock × CPU-cap matrix, are in the
+[governor guide](governor-tuning.md#sustained-loads-after-a-cooling-upgrade-10-minute-soaks).
 
 ## Revert
 

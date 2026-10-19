@@ -247,6 +247,13 @@ On our board (weak airflow, external fan), boosting all 8 cores under a combined
 CPU within a degree of 95 °C. Capping at 2550 MHz drops it 15 °C and the GPU is, if anything,
 slightly faster, because the CPU stops eating into the shared power budget.
 
+**10-minute soaks, after improving the board's cooling** (Oct 18, on Omarchy; full table in the
+[governor guide](governor-tuning.md#10-minute-soaks-the-heatsink-still-sets-the-ceiling)): the
+cap still matters. Uncapped, the CPU held 3454 MHz without throttling itself and reached
+**100 °C in 46 s**, so the test stopped it. Capped at 2550 MHz, the same load ran the full 10
+minutes, steady at 87 °C. A 2000 MHz cap was only ~1 °C cooler than 2550 and did 23 % less CPU
+work.
+
 ## Side effects
 
 - **GPU frequency readouts break**, as the community page warns: `pp_dpm_sclk` shows `16Mhz`, the

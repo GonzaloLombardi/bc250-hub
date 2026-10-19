@@ -93,8 +93,10 @@ first on Bazzite 44, then again on Omarchy 4.0.4.
   **1700 MHz efficiency sweet spot**, voltage-curve interpolation, D-Bus frequency pinning,
   a real before/after showing how much airflow changes temps (73 °C vs 91 °C at the same clock),
   a **500 MHz floor that cuts idle power by ~10 W (43 → 33 W) with no throughput loss**,
-  and an **undervolt test that caught silent miscompute** (wrong output, no crash) just 40 mV
-  below stock.
+  an **undervolt test that caught silent miscompute** (wrong output, no crash) just 40 mV
+  below stock, and **10-minute soaks after a cooling upgrade**: 15–20 °C cooler in short runs,
+  but the board still heat-soaks; a pinned 1850 MHz GPU sustains 6 % more than adaptive, and
+  uncapped CPU + GPU reaches 100 °C in 46 s.
 
 ### CPU
 - 🌡️ **[CPU frequency scaling & idle states on Bazzite (ACPI fix)](docs/cpu-acpi-fix-bazzite.md)** —
@@ -128,6 +130,9 @@ Validate and measure a board:
 - [`scripts/sweep-clocks.sh`](scripts/sweep-clocks.sh) — **clock sweep**: pins 1500–2000 MHz via
   the governor's D-Bus helper and logs pp512, sclk, vddgfx, temp and power *under load*. This is
   the method behind the governor table. `./sweep-clocks.sh` (no root needed).
+- [`scripts/soak-test.sh`](scripts/soak-test.sh) — **sustained load**: 10-minute CPU + GPU soaks
+  (GPU adaptive or pinned × CPU idle, uncapped or capped) with per-minute temps and power,
+  pp512 per batch and stress-ng throughput. Hard stop at 100 °C. `sudo ./soak-test.sh`.
 - [`scripts/undervolt-test.sh`](scripts/undervolt-test.sh) — **undervolt correctness test**:
   steps a clock's voltage down through the governor's TestMode and stops at the first step whose
   deterministic llama.cpp output differs from stock. It catches errors that benchmarks and
